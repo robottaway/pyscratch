@@ -103,3 +103,27 @@ class TestSuffixTree(unittest.TestCase):
         self.assertTrue(suffix_trie.trie.contains_path('blahbli')[0])
         self.assertTrue(suffix_trie.trie.contains_path('lahbla')[0])
         self.assertTrue(suffix_trie.trie.contains_path('lahbli')[0])
+
+
+class TestLargeFile(unittest.TestCase):
+
+    def test_substrings(self):
+        """Using a large set of dictionary words, create Suffix
+        Tree and look for works with a given substring.
+        """
+        import logging
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger('test')
+        logger.setLevel(logging.INFO)
+        substrs = ['ith', 'orn', 'iev', 'ass', 'net', 'ary', 'car', 'le']
+        st = SuffixTree()
+        with open('wordlist.csv', 'r') as fd:
+            for word in fd:
+                    st.index_string(word.split(',')[0].strip().lower()) 
+
+        for substr in substrs:
+            logger.info("looking for words with '%s' in them", substr)
+            found, metadata = st.trie.contains_path(substr)
+            if found:
+                for item in metadata:
+                    logger.info(">>> %s", item)
