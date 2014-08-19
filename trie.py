@@ -10,7 +10,7 @@ class Trie(object):
     def __init__(self):
         self.root = TrieNode(None)
 
-    def add_string(self, string, metadata=None):
+    def add_string(self, string, metadata=None, idx=0):
         """Add a string to the Trie"""
 
         if len(string) <= 0:
@@ -20,8 +20,9 @@ class Trie(object):
             if curr_node.has_child_char(c):
                 curr_node = curr_node.get_child_node(c)
             else:
-                curr_node = curr_node.add_child(c, metadata)
-        curr_node.terminal = True
+                curr_node = curr_node.add_child(c)
+            if metadata is not None:
+                curr_node.add_metadata(metadata)
 
     def contains_path(self, string):
         """See if sequence of characters given by value has a path in the Trie"""
@@ -44,8 +45,10 @@ class TrieNode(object):
     def __init__(self, char):
         self.char = char
         self.children = {}
-        self.terminal = False
-        self.metadata = []
+        self.metadata = set()
+
+    def __str__(self):
+        return "<(%s) char: %s>" % (self.__class__, self.char)
 
     def get_child_node(self, char):
         return self.children.get(char, None)
@@ -53,18 +56,39 @@ class TrieNode(object):
     def has_child_char(self, char):
         return char in self.children.keys()
 
-    def add_child(self, char, metadata=None):
+    def add_child(self, char):
         if not self.has_child_char(char):
             self.children[char] = TrieNode(char)
-        if metadata:
-            self.add_metadata(metadata)
         return self.children[char]
 
-    def add_terminal(self):
-        self.terminal = True
+    def depth_first(self, acc=None):
+        if acc:
+            accp = acc.compute(self.char)
+        else:
+            accp = None
+
+        yield self, accp
+        for child in self.children.values():
+            for child, cacc in child.depth_first(accp):
+                yield child, cacc
 
     def add_metadata(self, metadata):
-        self.metadata.append(metadata)
+        self.metadata.add(metadata)
+
+
+class Accumulator(object):
+
+    def __init__(self, seen=[]):
+        self.seen = seen
+
+    def __str__(self):
+        return "<%s, seen: %s>" % (self.__class__, self.seen)
+
+    def compute(self, char):
+        if char:
+            return Accumulator(self.seen+[char])
+        else:
+            return self
 
 
 class SuffixTree(object):
@@ -77,7 +101,13 @@ class SuffixTree(object):
         """Index the string's suffixes"""
 
         for i in range(len(string)):
-            self.trie.add_string(string[i:], string)
+            self.trie.add_string(string[i:], string, i)
+
+
+import logging
+logging.basicConfig(level=logging.INFO)
+test_logger = logging.getLogger('test')
+test_logger.setLevel(logging.INFO)
 
 
 class TestTrie(unittest.TestCase):
@@ -111,10 +141,6 @@ class TestLargeFile(unittest.TestCase):
         """Using a large set of dictionary words, create Suffix
         Tree and look for works with a given substring.
         """
-        import logging
-        logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger('test')
-        logger.setLevel(logging.INFO)
         substrs = ['ith', 'orn', 'iev', 'ass', 'net', 'ary', 'car', 'le']
         st = SuffixTree()
         with open('wordlist.csv', 'r') as fd:
@@ -122,8 +148,34 @@ class TestLargeFile(unittest.TestCase):
                     st.index_string(word.split(',')[0].strip().lower()) 
 
         for substr in substrs:
-            logger.info("looking for words with '%s' in them", substr)
+            test_logger.info("looking for words with '%s' in them", substr)
             found, metadata = st.trie.contains_path(substr)
             if found:
                 for item in metadata:
-                    logger.info(">>> %s", item)
+                    test_logger.info(">>> %s", item)
+
+    def test_palindromes(self):
+        """Given a word find the longest palindrome within"""
+
+        test_strings = ["baroness", "laval", "analisa", "zabba"]
+
+        for s in test_strings:
+            suffixes = []
+            st = SuffixTree()
+            sr = s[::-1]
+            st.index_string(s)
+            st.index_string(sr)
+            longest = None
+            for val, acc in st.trie.root.depth_first(Accumulator()):
+                seen = ''.join(acc.seen)
+                if len(seen) < 3:
+                    continue
+                if s in val.metadata and sr in val.metadata:
+                    if not longest:
+                        longest = seen
+                    if len(longest) < len(seen):
+                        longest = seen
+            if longest:
+                print "Longest for %s is %s" % (s, longest)
+            else:
+                print "No palindrome for %s" % (s)
